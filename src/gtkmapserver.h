@@ -59,6 +59,8 @@ GType gtk_mapserver_get_type (void) G_GNUC_CONST;
 
 GtkWidget *gtk_mapserver_new (void);
 
+void gtk_mapserver_set_home (GtkMapserver *gtkm, const gchar *url);
+
 
 G_END_DECLS
 

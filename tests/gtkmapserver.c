@@ -51,6 +51,8 @@ main (int argc, char **argv)
 
 	gtk_widget_show_all (window);
 
+	gtk_mapserver_set_home (GTK_MAPSERVER (gtkmap), "http://atlante/cgi-bin/mapserv?map=/var/www_mapper/www_pm4/config/cdu/RU_cdu.map&mode=map&layers=catasto");
+
 	/* Pass control to the GTK+ main event loop. */
 	gtk_main ();
 

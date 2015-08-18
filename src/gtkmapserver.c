@@ -32,6 +32,8 @@
 	#include <windows.h>
 #endif
 
+#include <libsoup/soup.h>
+
 #include "gtkmapserver.h"
 
 static void gtk_mapserver_class_init (GtkMapserverClass *klass);
@@ -51,7 +53,9 @@ static void gtk_mapserver_get_property (GObject *object,
 typedef struct _GtkMapserverPrivate GtkMapserverPrivate;
 struct _GtkMapserverPrivate
 	{
-		gpointer nothing;
+		GooCanvasItem *root;
+		GooCanvasItem *img;
+		SoupSession *soup_session;
 	};
 
 G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
@@ -90,6 +94,8 @@ static void
 gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 {
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+
+	priv->img = NULL;
 }
 
 GtkWidget
@@ -138,14 +144,83 @@ GtkWidget
 				  "background-color", "white",
 				  NULL);
 
-	GooCanvasItem *root = goo_canvas_get_root_item (GOO_CANVAS (gtk_mapserver));
+	priv->root = goo_canvas_get_root_item (GOO_CANVAS (gtk_mapserver));
 
-	/* Add a few simple items. */
-	goo_canvas_path_new (root,
-						"M 100 100 L 500 100 L 500 500 L 100 500 z",
-		                NULL);
+	priv->img = goo_canvas_image_new (priv->root,
+									  NULL,
+									  0, 0,
+									  NULL);
+
+	/* Soup */
+	priv->soup_session = soup_session_sync_new_with_options (SOUP_SESSION_SSL_CA_FILE, NULL,
+															 SOUP_SESSION_ADD_FEATURE_BY_TYPE, SOUP_TYPE_CONTENT_DECODER,
+															 SOUP_SESSION_ADD_FEATURE_BY_TYPE, SOUP_TYPE_COOKIE_JAR,
+															 SOUP_SESSION_USER_AGENT, "get ",
+															 SOUP_SESSION_ACCEPT_LANGUAGE_AUTO, TRUE,
+															 SOUP_SESSION_USE_NTLM, FALSE,
+															 NULL);
 
 	return gtk_mapserver;
+}
+
+void
+gtk_mapserver_set_home (GtkMapserver *gtkm,
+						const gchar *url)
+{
+	GError *error;
+	SoupMessage *msg;
+	GdkPixbufLoader *pxb_loader;
+
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	msg = soup_message_new (SOUP_METHOD_GET, url);
+	if (SOUP_IS_MESSAGE (msg))
+		{
+			soup_message_set_flags (msg, SOUP_MESSAGE_NO_REDIRECT);
+			soup_session_send_message (priv->soup_session, msg);
+		}
+
+	if (!SOUP_IS_MESSAGE (msg) || !SOUP_STATUS_IS_SUCCESSFUL (msg->status_code))
+		{
+			g_warning ("Error on retrieving url.");
+			pxb_loader = NULL;
+		}
+	else
+		{
+			error = NULL;
+			pxb_loader = gdk_pixbuf_loader_new ();
+			if (!gdk_pixbuf_loader_write (pxb_loader,
+										  msg->response_body->data,
+										  msg->response_body->length,
+										  &error)
+				|| error != NULL)
+				{
+					g_warning ("Error on retrieving map image: %s.",
+							   error != NULL && error->message != NULL ? error->message : "no details");
+					g_object_unref (pxb_loader);
+					pxb_loader = NULL;
+				}
+			else
+				{
+					gdk_pixbuf_loader_close (pxb_loader, NULL);
+				}
+		}
+	g_object_unref (msg);
+	if (pxb_loader != NULL)
+		{
+			g_object_set (G_OBJECT (priv->img),
+						  "pixbuf", gdk_pixbuf_loader_get_pixbuf (pxb_loader),
+						  NULL);
+
+			g_object_unref (pxb_loader);
+			pxb_loader = NULL;
+		}
+	else
+		{
+			g_object_set (G_OBJECT (priv->img),
+						  "pixbuf", NULL,
+						  NULL);
+		}
 }
 
 /* PRIVATE */
