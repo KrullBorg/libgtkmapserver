@@ -24,8 +24,8 @@
  is emitted when the 'x' close button is clicked. We just exit here. */
 static gboolean
 on_delete_event (GtkWidget *window,
-               GdkEvent  *event,
-               gpointer   unused_data)
+				 GdkEvent  *event,
+				 gpointer   unused_data)
 {
 	exit (0);
 }

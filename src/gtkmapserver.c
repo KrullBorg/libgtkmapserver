@@ -48,6 +48,18 @@ static void gtk_mapserver_get_property (GObject *object,
                                GValue *value,
                                GParamSpec *pspec);
 
+static gboolean gtk_mapserver_on_button_press_event (GtkWidget *widget,
+													 GdkEventButton *event,
+													 gpointer user_data);
+
+static gboolean gtk_mapserver_on_button_release_event (GtkWidget *widget,
+													   GdkEventButton *event,
+													   gpointer user_data);
+
+static gboolean gtk_mapserver_on_motion_notify_event (GtkWidget *widget,
+													  GdkEventMotion *event,
+													  gpointer user_data);
+
 #define GTK_MAPSERVER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), GTK_TYPE_MAPSERVER, GtkMapserverPrivate))
 
 typedef struct _GtkMapserverPrivate GtkMapserverPrivate;
@@ -56,6 +68,9 @@ struct _GtkMapserverPrivate
 		GooCanvasItem *root;
 		GooCanvasItem *img;
 		SoupSession *soup_session;
+
+		gdouble sel_x_start;
+		gdouble sel_y_start;
 	};
 
 G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
@@ -95,7 +110,12 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 {
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
 
+	priv->root = NULL;
 	priv->img = NULL;
+	priv->soup_session = NULL;
+
+	priv->sel_x_start = 0.0;
+	priv->sel_y_start = 0.0;
 }
 
 GtkWidget
@@ -139,6 +159,13 @@ GtkWidget
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 
 	g_free (localedir);
+
+	g_signal_connect (G_OBJECT (gtk_mapserver), "button-press-event",
+	                  G_CALLBACK (gtk_mapserver_on_button_press_event), (gpointer)gtk_mapserver);
+	g_signal_connect (G_OBJECT (gtk_mapserver), "button-release-event",
+	                  G_CALLBACK (gtk_mapserver_on_button_release_event), (gpointer)gtk_mapserver);
+	g_signal_connect (G_OBJECT (gtk_mapserver), "motion-notify-event",
+	                  G_CALLBACK (gtk_mapserver_on_motion_notify_event), (gpointer)gtk_mapserver);
 
 	g_object_set (G_OBJECT (gtk_mapserver),
 				  "background-color", "white",
@@ -249,5 +276,64 @@ gtk_mapserver_get_property (GObject *object, guint property_id, GValue *value, G
 			default:
 				G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
 				break;
+		}
+}
+
+/* SIGNALS */
+static gboolean
+gtk_mapserver_on_button_press_event (GtkWidget *widget,
+									 GdkEventButton *event,
+									 gpointer user_data)
+{
+	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+
+	if (event->button == 1)
+		{
+			priv->sel_x_start = event->x;
+			priv->sel_y_start = event->y;
+		}
+}
+
+static gboolean
+gtk_mapserver_on_button_release_event (GtkWidget *widget,
+									   GdkEventButton *event,
+									   gpointer user_data)
+{
+	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+}
+
+static gboolean
+gtk_mapserver_on_motion_notify_event (GtkWidget *widget,
+									  GdkEventMotion *event,
+									  gpointer user_data)
+{
+	gint x;
+	gint y;
+	GdkModifierType state;
+
+	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+
+	if (event->is_hint)
+		{
+			gdk_window_get_device_position (event->window, event->device, &x, &y, &state);
+		}
+	else
+		{
+			x = event->x;
+			y = event->y;
+			state = event->state;
+		}
+
+	if (state & GDK_BUTTON1_MASK)
+		{
+			goo_canvas_item_translate (priv->img,
+									   x - priv->sel_x_start,
+									   y - priv->sel_y_start);
+
+			priv->sel_x_start = x;
+			priv->sel_y_start = y;
 		}
 }
