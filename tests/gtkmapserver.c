@@ -42,10 +42,14 @@ main (int argc, char **argv)
 	/* Create the window and widgets. */
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_default_size (GTK_WINDOW (window), 640, 600);
-	gtk_widget_show (window);
 	g_signal_connect (window,
 					  "delete_event", G_CALLBACK (on_delete_event),
 		              NULL);
+
+	gtkmap = gtk_mapserver_new ();
+	gtk_container_add (GTK_CONTAINER (window), gtkmap);
+
+	gtk_widget_show_all (window);
 
 	/* Pass control to the GTK+ main event loop. */
 	gtk_main ();

@@ -51,6 +51,7 @@ static void gtk_mapserver_get_property (GObject *object,
 typedef struct _GtkMapserverPrivate GtkMapserverPrivate;
 struct _GtkMapserverPrivate
 	{
+		gpointer nothing;
 	};
 
 G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
@@ -132,6 +133,17 @@ GtkWidget
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 
 	g_free (localedir);
+
+	g_object_set (G_OBJECT (gtk_mapserver),
+				  "background-color", "white",
+				  NULL);
+
+	GooCanvasItem *root = goo_canvas_get_root_item (GOO_CANVAS (gtk_mapserver));
+
+	/* Add a few simple items. */
+	goo_canvas_path_new (root,
+						"M 100 100 L 500 100 L 500 500 L 100 500 z",
+		                NULL);
 
 	return gtk_mapserver;
 }
