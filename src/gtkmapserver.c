@@ -32,8 +32,6 @@
 	#include <windows.h>
 #endif
 
-#include <libsoup/soup.h>
-
 #include "gtkmapserver.h"
 
 static void gtk_mapserver_class_init (GtkMapserverClass *klass);
@@ -190,15 +188,15 @@ GtkWidget
 	return gtk_mapserver;
 }
 
-void
-gtk_mapserver_set_home (GtkMapserver *gtkm,
-						const gchar *url)
+SoupMessage
+*gtk_mapserver_get_soup_message (GtkMapserver *gtkm,
+								 const gchar *url)
 {
-	GError *error;
 	SoupMessage *msg;
-	GdkPixbufLoader *pxb_loader;
 
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	msg = NULL;
 
 	msg = soup_message_new (SOUP_METHOD_GET, url);
 	if (SOUP_IS_MESSAGE (msg))
@@ -209,7 +207,27 @@ gtk_mapserver_set_home (GtkMapserver *gtkm,
 
 	if (!SOUP_IS_MESSAGE (msg) || !SOUP_STATUS_IS_SUCCESSFUL (msg->status_code))
 		{
-			g_warning ("Error on retrieving url.");
+			g_warning ("Error on retrieving url: %s.", url);
+			msg = NULL;
+		}
+
+	return msg;
+}
+
+void
+gtk_mapserver_set_home (GtkMapserver *gtkm,
+						const gchar *url)
+{
+	GError *error;
+	SoupMessage *msg;
+	GdkPixbufLoader *pxb_loader;
+
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	msg = gtk_mapserver_get_soup_message (gtkm, url);
+
+	if (msg == NULL)
+		{
 			pxb_loader = NULL;
 		}
 	else
@@ -337,3 +355,5 @@ gtk_mapserver_on_motion_notify_event (GtkWidget *widget,
 			priv->sel_y_start = y;
 		}
 }
+
+/* UTILS */

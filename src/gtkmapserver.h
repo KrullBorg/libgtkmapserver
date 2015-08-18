@@ -27,7 +27,9 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
+
 #include <goocanvas.h>
+#include <libsoup/soup.h>
 
 
 G_BEGIN_DECLS
@@ -58,6 +60,9 @@ GType gtk_mapserver_get_type (void) G_GNUC_CONST;
 
 
 GtkWidget *gtk_mapserver_new (void);
+
+SoupMessage *gtk_mapserver_get_soup_message (GtkMapserver *gtkm,
+											 const gchar *url);
 
 void gtk_mapserver_set_home (GtkMapserver *gtkm, const gchar *url);
 
