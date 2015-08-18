@@ -27,6 +27,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
+#include <goocanvas.h>
 
 
 G_BEGIN_DECLS
@@ -45,18 +46,18 @@ typedef struct _GtkMapserverClass GtkMapserverClass;
 
 struct _GtkMapserver
 	{
-		GObject parent;
+		GooCanvas parent;
 	};
 
 struct _GtkMapserverClass
 	{
-		GObjectClass parent_class;
+		GooCanvasClass parent_class;
 	};
 
 GType gtk_mapserver_get_type (void) G_GNUC_CONST;
 
 
-GtkMapserver *gtk_mapserver_new (void);
+GtkWidget *gtk_mapserver_new (void);
 
 
 G_END_DECLS

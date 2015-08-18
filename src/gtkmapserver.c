@@ -53,7 +53,7 @@ struct _GtkMapserverPrivate
 	{
 	};
 
-G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, G_TYPE_OBJECT)
+G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
 
 #ifdef G_OS_WIN32
 static HMODULE hmodule;
@@ -91,14 +91,14 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
 }
 
-GtkMapserver
+GtkWidget
 *gtk_mapserver_new ()
 {
 	gchar *localedir;
 
-	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (g_object_new (gtk_mapserver_get_type (), NULL));
+	GtkWidget *gtk_mapserver = GTK_WIDGET (g_object_new (gtk_mapserver_get_type (), NULL));
 
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (GTK_MAPSERVER (gtk_mapserver));
 
 #ifdef G_OS_WIN32
 

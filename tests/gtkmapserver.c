@@ -16,11 +16,39 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <stdlib.h>
+
 #include "gtkmapserver.h"
+
+/* This is our handler for the "delete-event" signal of the window, which
+ is emitted when the 'x' close button is clicked. We just exit here. */
+static gboolean
+on_delete_event (GtkWidget *window,
+               GdkEvent  *event,
+               gpointer   unused_data)
+{
+	exit (0);
+}
 
 int
 main (int argc, char **argv)
 {
+	GtkWidget *window;
+	GtkWidget *gtkmap;
+
+	/* Initialize GTK+. */
+	gtk_init (&argc, &argv);
+
+	/* Create the window and widgets. */
+	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size (GTK_WINDOW (window), 640, 600);
+	gtk_widget_show (window);
+	g_signal_connect (window,
+					  "delete_event", G_CALLBACK (on_delete_event),
+		              NULL);
+
+	/* Pass control to the GTK+ main event loop. */
+	gtk_main ();
 
 	return 0;
 }
