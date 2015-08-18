@@ -227,19 +227,21 @@ SoupMessage
 }
 
 /**
- * gtk_mapserver_set_home:
+ * gtk_mapserver_get_extent:
  * @gtkm:
  * @url:
+ *
+ * Returns: a #GdkPibxbuf.
  */
-void
-gtk_mapserver_set_home (GtkMapserver *gtkm,
-						const gchar *url)
+GdkPixbuf
+*gtk_mapserver_get_gdk_pixbuf (GtkMapserver *gtkm, const gchar *url)
 {
+	GdkPixbuf *ret;
 	GError *error;
 	SoupMessage *msg;
 	GdkPixbufLoader *pxb_loader;
 
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+	ret = NULL;
 
 	msg = gtk_mapserver_get_soup_message (gtkm, url);
 
@@ -271,19 +273,31 @@ gtk_mapserver_set_home (GtkMapserver *gtkm,
 		}
 	if (pxb_loader != NULL)
 		{
-			g_object_set (G_OBJECT (priv->img),
-						  "pixbuf", gdk_pixbuf_loader_get_pixbuf (pxb_loader),
-						  NULL);
-
+			ret = g_object_ref (gdk_pixbuf_loader_get_pixbuf (pxb_loader));
 			g_object_unref (pxb_loader);
-			pxb_loader = NULL;
 		}
-	else
-		{
-			g_object_set (G_OBJECT (priv->img),
-						  "pixbuf", NULL,
-						  NULL);
-		}
+
+	return ret;
+}
+
+/**
+ * gtk_mapserver_set_home:
+ * @gtkm:
+ * @url:
+ */
+void
+gtk_mapserver_set_home (GtkMapserver *gtkm,
+						const gchar *url)
+{
+	GdkPixbuf *pixbuf;
+
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	pixbuf = gtk_mapserver_get_gdk_pixbuf (gtkm, url);
+
+	g_object_set (G_OBJECT (priv->img),
+				  "pixbuf", pixbuf,
+				  NULL);
 }
 
 /**
