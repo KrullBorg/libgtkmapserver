@@ -35,6 +35,7 @@ main (int argc, char **argv)
 {
 	GtkWidget *window;
 	GtkWidget *gtkmap;
+	GtkMapserverExtent *ext;
 
 	/* Initialize GTK+. */
 	gtk_init (&argc, &argv);
@@ -52,6 +53,12 @@ main (int argc, char **argv)
 	gtk_widget_show_all (window);
 
 	gtk_mapserver_set_home (GTK_MAPSERVER (gtkmap), "http://atlante/cgi-bin/mapserv?map=/var/www_mapper/www_pm4/config/cdu/RU_cdu.map&mode=map&layers=catasto");
+
+	ext = gtk_mapserver_get_extent (GTK_MAPSERVER (gtkmap), "http://atlante/cgi-bin/mapserv?map=/var/www_mapper/www_pm4/config/cdu/RU_cdu.map&mode=itemquery&qlayer=catasto&qstring=\"foglio\"='2' and \"part\"='22'&map.layer[catasto]=TEMPLATE \"shpext.html\"");
+	if (ext != NULL)
+		{
+			g_message ("Extent: %f %f %f %f", ext->minx, ext->miny, ext->maxx, ext->maxy);
+		}
 
 	/* Pass control to the GTK+ main event loop. */
 	gtk_main ();

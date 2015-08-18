@@ -66,6 +66,16 @@ SoupMessage *gtk_mapserver_get_soup_message (GtkMapserver *gtkm,
 
 void gtk_mapserver_set_home (GtkMapserver *gtkm, const gchar *url);
 
+typedef struct
+	{
+		gdouble minx;
+		gdouble miny;
+		gdouble maxx;
+		gdouble maxy;
+	} GtkMapserverExtent;
+
+GtkMapserverExtent *gtk_mapserver_get_extent (GtkMapserver *gtkm, const gchar *url);
+
 
 G_END_DECLS
 

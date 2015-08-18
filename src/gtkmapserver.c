@@ -116,6 +116,11 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	priv->sel_y_start = 0.0;
 }
 
+/**
+ * gtk_mapserver_new:
+ *
+ * Returns: the new created #GtkMapserver object.
+ */
 GtkWidget
 *gtk_mapserver_new ()
 {
@@ -188,6 +193,13 @@ GtkWidget
 	return gtk_mapserver;
 }
 
+/**
+ * gtk_mapserver_get_soup_message:
+ * @gtkm:
+ * @url:
+ *
+ * Returns:
+ */
 SoupMessage
 *gtk_mapserver_get_soup_message (GtkMapserver *gtkm,
 								 const gchar *url)
@@ -214,6 +226,11 @@ SoupMessage
 	return msg;
 }
 
+/**
+ * gtk_mapserver_set_home:
+ * @gtkm:
+ * @url:
+ */
 void
 gtk_mapserver_set_home (GtkMapserver *gtkm,
 						const gchar *url)
@@ -249,8 +266,9 @@ gtk_mapserver_set_home (GtkMapserver *gtkm,
 				{
 					gdk_pixbuf_loader_close (pxb_loader, NULL);
 				}
+
+			g_object_unref (msg);
 		}
-	g_object_unref (msg);
 	if (pxb_loader != NULL)
 		{
 			g_object_set (G_OBJECT (priv->img),
@@ -266,6 +284,42 @@ gtk_mapserver_set_home (GtkMapserver *gtkm,
 						  "pixbuf", NULL,
 						  NULL);
 		}
+}
+
+/**
+ * gtk_mapserver_get_extent:
+ * @gtkm:
+ * @url:
+ *
+ * Returns: a #GtkMapserverExtent. Mapserver must returns an html page in the form "minx miny maxx maxy".
+ */
+GtkMapserverExtent
+*gtk_mapserver_get_extent (GtkMapserver *gtkm, const gchar *url)
+{
+	GtkMapserverExtent *ext;
+	SoupMessage *msg;
+
+	ext = NULL;
+
+	msg = gtk_mapserver_get_soup_message (gtkm, url);
+	if (msg != NULL)
+		{
+			gchar **coords;
+
+			ext = (GtkMapserverExtent *)g_new0 (GtkMapserverExtent, 1);
+
+			coords = g_strsplit (msg->response_body->data, " ", -1);
+			ext->minx = g_strtod (coords[0], NULL);
+			ext->miny = g_strtod (coords[1], NULL);
+			ext->maxx = g_strtod (coords[2], NULL);
+			ext->maxy = g_strtod (coords[3], NULL);
+
+			g_strfreev (coords);
+
+			g_object_unref (msg);
+		}
+
+	return ext;
 }
 
 /* PRIVATE */
