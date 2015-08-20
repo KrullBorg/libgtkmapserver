@@ -46,6 +46,10 @@ PKG_CHECK_MODULES(GTKMAPSERVER, [gtk+-3.0 >= 3
 AC_SUBST(GTKMAPSERVER_CFLAGS)
 AC_SUBST(GTKMAPSERVER_LIBS)
 
+PKG_CHECK_EXISTS(gladeui-2.0 >= 3.10.0, [GLADEUI_FOUND=yes], [GLADEUI_FOUND=no])
+
+AM_CONDITIONAL(GLADEUI_FOUND, test $GLADEUI_FOUND = yes)
+
 # Checks for header files.
 AC_HEADER_STDC
 
@@ -77,4 +81,17 @@ AC_CONFIG_FILES([
 	src/Makefile
 	tests/Makefile
 ])
+
+if test $GLADEUI_FOUND = yes; then
+AC_CONFIG_FILES([
+	glade/Makefile
+	glade/icons/Makefile
+	glade/icons/hicolor/Makefile
+	glade/icons/hicolor/16x16/Makefile
+	glade/icons/hicolor/16x16/actions/Makefile
+	glade/icons/hicolor/22x22/Makefile
+	glade/icons/hicolor/22x22/actions/Makefile
+])
+fi
+
 AC_OUTPUT

@@ -1,4 +1,10 @@
-SUBDIRS = src tests
+if GLADEUI_FOUND
+SUBDIRS_GLADE = glade
+else
+SUBDIRS_GLADE =
+endif
+
+SUBDIRS = src tests $(SUBDIRS_GLADE)
 
 ACLOCAL_AMFLAGS = -I m4
 
