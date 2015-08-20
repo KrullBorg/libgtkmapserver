@@ -106,6 +106,8 @@ gtk_mapserver_class_init (GtkMapserverClass *klass)
 static void
 gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 {
+	gchar *localedir;
+
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
 
 	priv->root = NULL;
@@ -114,21 +116,6 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 
 	priv->sel_x_start = 0.0;
 	priv->sel_y_start = 0.0;
-}
-
-/**
- * gtk_mapserver_new:
- *
- * Returns: the new created #GtkMapserver object.
- */
-GtkWidget
-*gtk_mapserver_new ()
-{
-	gchar *localedir;
-
-	GtkWidget *gtk_mapserver = GTK_WIDGET (g_object_new (gtk_mapserver_get_type (), NULL));
-
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (GTK_MAPSERVER (gtk_mapserver));
 
 #ifdef G_OS_WIN32
 
@@ -189,6 +176,17 @@ GtkWidget
 															 SOUP_SESSION_ACCEPT_LANGUAGE_AUTO, TRUE,
 															 SOUP_SESSION_USE_NTLM, FALSE,
 															 NULL);
+}
+
+/**
+ * gtk_mapserver_new:
+ *
+ * Returns: the new created #GtkMapserver object.
+ */
+GtkWidget
+*gtk_mapserver_new ()
+{
+	GtkWidget *gtk_mapserver = GTK_WIDGET (g_object_new (gtk_mapserver_get_type (), NULL));
 
 	return gtk_mapserver;
 }
