@@ -46,6 +46,12 @@ static void gtk_mapserver_get_property (GObject *object,
                                GValue *value,
                                GParamSpec *pspec);
 
+static gboolean gtk_mapserver_on_key_release_event (GooCanvasItem *item,
+													GooCanvasItem *target_item,
+													GdkEventKey *event,
+													gpointer user_data);
+
+
 static gboolean gtk_mapserver_on_button_press_event (GtkWidget *widget,
 													 GdkEventButton *event,
 													 gpointer user_data);
@@ -150,6 +156,8 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 
 	g_free (localedir);
 
+	gtk_widget_set_can_focus (GTK_WIDGET (gtk_mapserver), TRUE);
+
 	g_signal_connect (G_OBJECT (gtk_mapserver), "button-press-event",
 	                  G_CALLBACK (gtk_mapserver_on_button_press_event), (gpointer)gtk_mapserver);
 	g_signal_connect (G_OBJECT (gtk_mapserver), "button-release-event",
@@ -167,6 +175,11 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 									  NULL,
 									  0, 0,
 									  NULL);
+
+	goo_canvas_grab_focus (GOO_CANVAS (gtk_mapserver), priv->img);
+
+	g_signal_connect (G_OBJECT (priv->img), "key-release-event",
+					  G_CALLBACK (gtk_mapserver_on_key_release_event), (gpointer)gtk_mapserver);
 
 	/* Soup */
 	priv->soup_session = soup_session_sync_new_with_options (SOUP_SESSION_SSL_CA_FILE, NULL,
@@ -365,12 +378,98 @@ gtk_mapserver_get_property (GObject *object, guint property_id, GValue *value, G
 
 /* SIGNALS */
 static gboolean
+gtk_mapserver_on_key_release_event (GooCanvasItem *item,
+									GooCanvasItem *target_item,
+									GdkEventKey *event,
+									gpointer user_data)
+{
+	switch (event->keyval)
+		{
+			case GDK_KEY_0:
+			case GDK_KEY_KP_0:
+				{
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+
+					gdouble x;
+					gdouble y;
+					gdouble scale;
+					gdouble rotation;
+
+					goo_canvas_item_get_simple_transform (priv->img,
+														  &x,
+														  &y,
+														  &scale,
+														  &rotation);
+					goo_canvas_item_set_simple_transform (priv->img,
+														  x,
+														  y,
+														  1,
+														  rotation);
+
+					return TRUE;
+				}
+
+			case GDK_KEY_plus:
+			case GDK_KEY_KP_Add:
+				{
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+
+					gdouble x;
+					gdouble y;
+					gdouble scale;
+					gdouble rotation;
+
+					goo_canvas_item_get_simple_transform (priv->img,
+														  &x,
+														  &y,
+														  &scale,
+														  &rotation);
+					goo_canvas_item_set_simple_transform (priv->img,
+														  x,
+														  y,
+														  scale + 0.1,
+														  rotation);
+
+					return TRUE;
+				}
+
+			case GDK_KEY_minus:
+			case GDK_KEY_KP_Subtract:
+				{
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+
+					gdouble x;
+					gdouble y;
+					gdouble scale;
+					gdouble rotation;
+
+					goo_canvas_item_get_simple_transform (priv->img,
+														  &x,
+														  &y,
+														  &scale,
+														  &rotation);
+					goo_canvas_item_set_simple_transform (priv->img,
+														  x,
+														  y,
+														  scale - 0.1,
+														  rotation);
+
+					return TRUE;
+				}
+		}
+
+	return FALSE;
+}
+
+static gboolean
 gtk_mapserver_on_button_press_event (GtkWidget *widget,
 									 GdkEventButton *event,
 									 gpointer user_data)
 {
 	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+
+	goo_canvas_grab_focus (GOO_CANVAS (gtk_mapserver), priv->img);
 
 	if (event->button == 1)
 		{
