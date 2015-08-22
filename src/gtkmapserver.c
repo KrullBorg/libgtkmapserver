@@ -46,11 +46,17 @@ static void gtk_mapserver_get_property (GObject *object,
                                GValue *value,
                                GParamSpec *pspec);
 
+static gboolean gtk_mapserver_resize_timer (gpointer user_data);
+static void gtk_mapserver_draw (GtkMapserver *gtkm);
+
+static void gtk_mapserver_on_size_allocate (GtkWidget *widget,
+											GdkRectangle *allocation,
+											gpointer user_data);
+
 static gboolean gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 													GooCanvasItem *target_item,
 													GdkEventKey *event,
 													gpointer user_data);
-
 
 static gboolean gtk_mapserver_on_button_press_event (GtkWidget *widget,
 													 GdkEventButton *event,
@@ -73,8 +79,12 @@ struct _GtkMapserverPrivate
 		GooCanvasItem *img;
 		SoupSession *soup_session;
 
+		gchar *url;
+
 		gdouble sel_x_start;
 		gdouble sel_y_start;
+
+		GSource *sresize;
 	};
 
 G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
@@ -120,8 +130,12 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	priv->img = NULL;
 	priv->soup_session = NULL;
 
+	priv->url = NULL;
+
 	priv->sel_x_start = 0.0;
 	priv->sel_y_start = 0.0;
+
+	priv->sresize = NULL;
 
 #ifdef G_OS_WIN32
 
@@ -157,6 +171,9 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	g_free (localedir);
 
 	gtk_widget_set_can_focus (GTK_WIDGET (gtk_mapserver), TRUE);
+
+	g_signal_connect (G_OBJECT (gtk_mapserver), "size-allocate",
+	                  G_CALLBACK (gtk_mapserver_on_size_allocate), (gpointer)gtk_mapserver);
 
 	g_signal_connect (G_OBJECT (gtk_mapserver), "button-press-event",
 	                  G_CALLBACK (gtk_mapserver_on_button_press_event), (gpointer)gtk_mapserver);
@@ -300,15 +317,18 @@ void
 gtk_mapserver_set_home (GtkMapserver *gtkm,
 						const gchar *url)
 {
-	GdkPixbuf *pixbuf;
-
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
-	pixbuf = gtk_mapserver_get_gdk_pixbuf (gtkm, url);
+	g_return_if_fail (url != NULL);
 
-	g_object_set (G_OBJECT (priv->img),
-				  "pixbuf", pixbuf,
-				  NULL);
+	if (priv->url != NULL)
+		{
+			g_free (priv->url);
+		}
+
+	priv->url = g_strdup (url);
+
+	gtk_mapserver_draw (gtkm);
 }
 
 /**
@@ -376,7 +396,71 @@ gtk_mapserver_get_property (GObject *object, guint property_id, GValue *value, G
 		}
 }
 
+static gboolean
+gtk_mapserver_resize_timer (gpointer user_data)
+{
+	GtkMapserver *gtkm = (GtkMapserver *)user_data;
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	if (gtk_widget_get_realized (GTK_WIDGET (gtkm)))
+		{
+			gtk_mapserver_draw (gtkm);
+			g_source_destroy (priv->sresize);
+			priv->sresize = NULL;
+		}
+
+	return TRUE;
+}
+
+static void
+gtk_mapserver_draw (GtkMapserver *gtkm)
+{
+	GtkAllocation allocation;
+	GdkPixbuf *pixbuf;
+
+	gchar *_url;
+
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	gtk_widget_get_allocation (GTK_WIDGET (gtkm), &allocation);
+
+	_url = g_strdup_printf ("%s&MAPSIZE=%d %d",
+							priv->url,
+							allocation.width - allocation.x,
+							allocation.height - allocation.y);
+
+	pixbuf = gtk_mapserver_get_gdk_pixbuf (gtkm, _url);
+
+	g_object_set (G_OBJECT (priv->img),
+				  "pixbuf", pixbuf,
+				  NULL);
+
+	g_free (_url);
+}
+
 /* SIGNALS */
+static void
+gtk_mapserver_on_size_allocate (GtkWidget *widget,
+								GdkRectangle *allocation,
+								gpointer user_data)
+{
+	GtkMapserver *gtkm = (GtkMapserver *)user_data;
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	if (!gtk_widget_get_realized (GTK_WIDGET (gtkm)))
+		{
+			return;
+		}
+
+	if (priv->sresize != NULL)
+		{
+			g_source_destroy (priv->sresize);
+		}
+	priv->sresize = g_timeout_source_new_seconds (1);
+	g_source_set_callback (priv->sresize, gtk_mapserver_resize_timer, (gpointer)gtkm, NULL);
+	g_source_attach (priv->sresize, NULL);
+}
+
 static gboolean
 gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 									GooCanvasItem *target_item,
