@@ -461,6 +461,36 @@ gtk_mapserver_on_size_allocate (GtkWidget *widget,
 	g_source_attach (priv->sresize, NULL);
 }
 
+static void
+gtk_mapserver_center_map (GtkMapserver *gtkm)
+{
+	GtkAllocation allocation;
+	GooCanvasBounds bounds;
+
+	gdouble x;
+	gdouble y;
+	gdouble scale;
+	gdouble rotation;
+
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	gtk_widget_get_allocation (GTK_WIDGET (gtkm), &allocation);
+
+	goo_canvas_item_get_bounds (priv->img, &bounds);
+
+	goo_canvas_item_get_simple_transform (priv->img,
+										  &x,
+										  &y,
+										  &scale,
+										  &rotation);
+
+	goo_canvas_item_set_simple_transform (priv->img,
+										  ((gdouble)allocation.width - (bounds.x2 - bounds.x1)) / 2,
+										  ((gdouble)allocation.height - (bounds.y2 - bounds.y1)) / 2,
+										  scale,
+										  rotation);
+}
+
 static gboolean
 gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 									GooCanvasItem *target_item,
@@ -472,7 +502,8 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 			case GDK_KEY_0:
 			case GDK_KEY_KP_0:
 				{
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+					GtkMapserver *gtkm = (GtkMapserver *)user_data;
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
 					gdouble x;
 					gdouble y;
@@ -489,6 +520,7 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  y,
 														  1,
 														  rotation);
+					gtk_mapserver_center_map (gtkm);
 
 					return TRUE;
 				}
@@ -496,7 +528,8 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 			case GDK_KEY_plus:
 			case GDK_KEY_KP_Add:
 				{
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+					GtkMapserver *gtkm = (GtkMapserver *)user_data;
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
 					gdouble x;
 					gdouble y;
@@ -513,6 +546,7 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  y,
 														  scale + 0.1,
 														  rotation);
+					gtk_mapserver_center_map (gtkm);
 
 					return TRUE;
 				}
@@ -520,7 +554,8 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 			case GDK_KEY_minus:
 			case GDK_KEY_KP_Subtract:
 				{
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE ((GtkMapserver *)user_data);
+					GtkMapserver *gtkm = (GtkMapserver *)user_data;
+					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
 					gdouble x;
 					gdouble y;
@@ -537,6 +572,7 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  y,
 														  scale - 0.1,
 														  rotation);
+					gtk_mapserver_center_map (gtkm);
 
 					return TRUE;
 				}
