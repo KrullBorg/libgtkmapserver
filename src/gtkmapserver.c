@@ -25,6 +25,8 @@
 	#include <config.h>
 #endif
 
+#include <locale.h>
+
 #include <glib/gi18n-lib.h>
 #include <gtk/gtk.h>
 
@@ -46,7 +48,7 @@ static void gtk_mapserver_get_property (GObject *object,
                                GValue *value,
                                GParamSpec *pspec);
 
-static gboolean gtk_mapserver_resize_timer (gpointer user_data);
+static gboolean gtk_mapserver_event_timer (gpointer user_data);
 static void gtk_mapserver_draw (GtkMapserver *gtkm);
 
 static void gtk_mapserver_on_size_allocate (GtkWidget *widget,
@@ -79,15 +81,22 @@ struct _GtkMapserverPrivate
 		GooCanvasItem *img;
 		SoupSession *soup_session;
 
-		gchar *url;
+		GString *url;
+		GString *url_no_ext;
+		GtkMapserverExtent *ext;
+		GtkMapserverExtent *ext_cur;
+		gdouble ext_scale_x;
+		gdouble ext_scale_y;
 
 		gdouble sel_x_start;
 		gdouble sel_y_start;
 
-		GSource *sresize;
+		GSource *sevent;
 	};
 
 G_DEFINE_TYPE (GtkMapserver, gtk_mapserver, GOO_TYPE_CANVAS)
+
+#define SCALE 0.1
 
 #ifdef G_OS_WIN32
 static HMODULE hmodule;
@@ -131,11 +140,16 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	priv->soup_session = NULL;
 
 	priv->url = NULL;
+	priv->url_no_ext = NULL;
+	priv->ext = NULL;
+	priv->ext_cur = NULL;
+	priv->ext_scale_x = 0.0;
+	priv->ext_scale_y = 0.0;
 
 	priv->sel_x_start = 0.0;
 	priv->sel_y_start = 0.0;
 
-	priv->sresize = NULL;
+	priv->sevent = NULL;
 
 #ifdef G_OS_WIN32
 
@@ -308,25 +322,94 @@ GdkPixbuf
 	return ret;
 }
 
+static GtkMapserverExtent
+*gtk_mapserver_str_to_extent (const gchar *str)
+{
+	GtkMapserverExtent *ext;
+
+	gchar **coords;
+
+	ext = (GtkMapserverExtent *)g_new0 (GtkMapserverExtent, 1);
+
+	coords = g_strsplit (str, " ", -1);
+	ext->minx = g_strtod (coords[0], NULL);
+	ext->miny = g_strtod (coords[1], NULL);
+	ext->maxx = g_strtod (coords[2], NULL);
+	ext->maxy = g_strtod (coords[3], NULL);
+
+	g_strfreev (coords);
+
+	return ext;
+}
+
 /**
  * gtk_mapserver_set_home:
  * @gtkm:
  * @url:
+ * @extent:
  */
 void
 gtk_mapserver_set_home (GtkMapserver *gtkm,
-						const gchar *url)
+						const gchar *url,
+						GtkMapserverExtent *ext)
 {
+	gchar *strext;
+	gchar *mapext;
+	gchar *mapext_end;
+
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
 	g_return_if_fail (url != NULL);
 
 	if (priv->url != NULL)
 		{
-			g_free (priv->url);
+			g_string_free (priv->url, TRUE);
+			g_string_free (priv->url_no_ext, TRUE);
 		}
 
-	priv->url = g_strdup (url);
+	priv->url = g_string_new (url);
+	priv->url_no_ext = g_string_new (url);
+
+	if (priv->ext != NULL)
+		{
+			g_free (priv->ext);
+			g_free (priv->ext_cur);
+		}
+	if (ext != NULL)
+		{
+			priv->ext = g_memdup (ext, sizeof (GtkMapserverExtent));
+			priv->ext_cur = g_memdup (ext, sizeof (GtkMapserverExtent));
+		}
+	else
+		{
+			/* try to find map extent in url */
+			mapext = g_strstr_len (priv->url_no_ext->str, -1, "mapext");
+			if (mapext != NULL)
+				{
+					mapext_end = g_strstr_len (mapext, -1, "&");
+					if (mapext_end == NULL)
+						{
+							strext = g_strdup (mapext + 7);
+							/* remove MAPEXT from url */
+							g_string_erase (priv->url_no_ext, mapext - priv->url_no_ext->str, -1);
+						}
+					else
+						{
+							strext = g_strndup (mapext + 7, mapext_end - mapext);
+							/* remove MAPEXT from url */
+							g_string_erase (priv->url_no_ext, mapext - priv->url_no_ext->str, mapext_end - mapext + 1);
+						}
+					priv->ext = gtk_mapserver_str_to_extent (strext);
+					priv->ext_cur = gtk_mapserver_str_to_extent (strext);
+
+					g_free (strext);
+				}
+		}
+	if (priv->ext == NULL)
+		{
+			g_warning ("You must set initial map extent.");
+			return;
+		}
 
 	gtk_mapserver_draw (gtkm);
 }
@@ -349,17 +432,7 @@ GtkMapserverExtent
 	msg = gtk_mapserver_get_soup_message (gtkm, url);
 	if (msg != NULL)
 		{
-			gchar **coords;
-
-			ext = (GtkMapserverExtent *)g_new0 (GtkMapserverExtent, 1);
-
-			coords = g_strsplit (msg->response_body->data, " ", -1);
-			ext->minx = g_strtod (coords[0], NULL);
-			ext->miny = g_strtod (coords[1], NULL);
-			ext->maxx = g_strtod (coords[2], NULL);
-			ext->maxy = g_strtod (coords[3], NULL);
-
-			g_strfreev (coords);
+			ext = gtk_mapserver_str_to_extent (msg->response_body->data);
 
 			g_object_unref (msg);
 		}
@@ -397,7 +470,7 @@ gtk_mapserver_get_property (GObject *object, guint property_id, GValue *value, G
 }
 
 static gboolean
-gtk_mapserver_resize_timer (gpointer user_data)
+gtk_mapserver_event_timer (gpointer user_data)
 {
 	GtkMapserver *gtkm = (GtkMapserver *)user_data;
 	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
@@ -405,8 +478,8 @@ gtk_mapserver_resize_timer (gpointer user_data)
 	if (gtk_widget_get_realized (GTK_WIDGET (gtkm)))
 		{
 			gtk_mapserver_draw (gtkm);
-			g_source_destroy (priv->sresize);
-			priv->sresize = NULL;
+			g_source_destroy (priv->sevent);
+			priv->sevent = NULL;
 		}
 
 	return TRUE;
@@ -416,6 +489,10 @@ static void
 gtk_mapserver_draw (GtkMapserver *gtkm)
 {
 	GtkAllocation allocation;
+	gdouble x;
+	gdouble y;
+	gdouble scale;
+	gdouble rotation;
 	GdkPixbuf *pixbuf;
 
 	gchar *_url;
@@ -424,11 +501,31 @@ gtk_mapserver_draw (GtkMapserver *gtkm)
 
 	gtk_widget_get_allocation (GTK_WIDGET (gtkm), &allocation);
 
-	_url = g_strdup_printf ("%s&MAPSIZE=%d %d",
-							priv->url,
-							allocation.width - allocation.x,
-							allocation.height - allocation.y);
+	goo_canvas_item_get_simple_transform (priv->img,
+										  &x,
+										  &y,
+										  &scale,
+										  &rotation);
 
+	char *lccur = g_strdup (setlocale (LC_NUMERIC, NULL));
+	setlocale (LC_NUMERIC, "C");
+
+	_url = g_strdup_printf ("%s&mapsize=%d %d&mapext=%f %f %f %f",
+							priv->url_no_ext->str,
+							allocation.width,
+							allocation.height,
+							priv->ext_cur->minx,
+							priv->ext_cur->miny,
+							priv->ext_cur->maxx,
+							priv->ext_cur->maxy);
+
+	setlocale (LC_NUMERIC, lccur);
+
+	goo_canvas_item_set_simple_transform (priv->img,
+										  0,
+										  0,
+										  1,
+										  rotation);
 	pixbuf = gtk_mapserver_get_gdk_pixbuf (gtkm, _url);
 
 	g_object_set (G_OBJECT (priv->img),
@@ -436,6 +533,20 @@ gtk_mapserver_draw (GtkMapserver *gtkm)
 				  NULL);
 
 	g_free (_url);
+}
+
+static void
+gtk_mapserver_event_occurred (GtkMapserver *gtkm)
+{
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	if (priv->sevent != NULL)
+		{
+			g_source_destroy (priv->sevent);
+		}
+	priv->sevent = g_timeout_source_new (500);
+	g_source_set_callback (priv->sevent, gtk_mapserver_event_timer, (gpointer)gtkm, NULL);
+	g_source_attach (priv->sevent, NULL);
 }
 
 /* SIGNALS */
@@ -452,13 +563,7 @@ gtk_mapserver_on_size_allocate (GtkWidget *widget,
 			return;
 		}
 
-	if (priv->sresize != NULL)
-		{
-			g_source_destroy (priv->sresize);
-		}
-	priv->sresize = g_timeout_source_new_seconds (1);
-	g_source_set_callback (priv->sresize, gtk_mapserver_resize_timer, (gpointer)gtkm, NULL);
-	g_source_attach (priv->sresize, NULL);
+	gtk_mapserver_event_occurred (gtkm);
 }
 
 static void
@@ -497,14 +602,19 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 									GdkEventKey *event,
 									gpointer user_data)
 {
+	GtkMapserver *gtkm = (GtkMapserver *)user_data;
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	if (!gtk_widget_get_realized (GTK_WIDGET (gtkm)))
+		{
+			return FALSE;
+		}
+
 	switch (event->keyval)
 		{
 			case GDK_KEY_0:
 			case GDK_KEY_KP_0:
 				{
-					GtkMapserver *gtkm = (GtkMapserver *)user_data;
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
-
 					gdouble x;
 					gdouble y;
 					gdouble scale;
@@ -522,15 +632,17 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  rotation);
 					gtk_mapserver_center_map (gtkm);
 
+					g_free (priv->ext_cur);
+					priv->ext_cur = g_memdup (priv->ext, sizeof (GtkMapserverExtent));
+
+					gtk_mapserver_event_occurred (gtkm);
+
 					return TRUE;
 				}
 
 			case GDK_KEY_plus:
 			case GDK_KEY_KP_Add:
 				{
-					GtkMapserver *gtkm = (GtkMapserver *)user_data;
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
-
 					gdouble x;
 					gdouble y;
 					gdouble scale;
@@ -544,9 +656,19 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 					goo_canvas_item_set_simple_transform (priv->img,
 														  x,
 														  y,
-														  scale + 0.1,
+														  scale + SCALE,
 														  rotation);
 					gtk_mapserver_center_map (gtkm);
+
+					priv->ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
+					priv->ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
+
+					priv->ext_cur->minx += priv->ext_scale_x;
+					priv->ext_cur->miny += priv->ext_scale_y;
+					priv->ext_cur->maxx -= priv->ext_scale_x;
+					priv->ext_cur->maxy -= priv->ext_scale_y;
+
+					gtk_mapserver_event_occurred (gtkm);
 
 					return TRUE;
 				}
@@ -554,9 +676,6 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 			case GDK_KEY_minus:
 			case GDK_KEY_KP_Subtract:
 				{
-					GtkMapserver *gtkm = (GtkMapserver *)user_data;
-					GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
-
 					gdouble x;
 					gdouble y;
 					gdouble scale;
@@ -570,9 +689,19 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 					goo_canvas_item_set_simple_transform (priv->img,
 														  x,
 														  y,
-														  scale - 0.1,
+														  scale - SCALE,
 														  rotation);
 					gtk_mapserver_center_map (gtkm);
+
+					priv->ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
+					priv->ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
+
+					priv->ext_cur->minx -= priv->ext_scale_x;
+					priv->ext_cur->miny -= priv->ext_scale_y;
+					priv->ext_cur->maxx += priv->ext_scale_x;
+					priv->ext_cur->maxy += priv->ext_scale_y;
+
+					gtk_mapserver_event_occurred (gtkm);
 
 					return TRUE;
 				}

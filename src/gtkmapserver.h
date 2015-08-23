@@ -66,8 +66,6 @@ SoupMessage *gtk_mapserver_get_soup_message (GtkMapserver *gtkm,
 
 GdkPixbuf *gtk_mapserver_get_gdk_pixbuf (GtkMapserver *gtkm, const gchar *url);
 
-void gtk_mapserver_set_home (GtkMapserver *gtkm, const gchar *url);
-
 typedef struct
 	{
 		gdouble minx;
@@ -77,6 +75,8 @@ typedef struct
 	} GtkMapserverExtent;
 
 GtkMapserverExtent *gtk_mapserver_get_extent (GtkMapserver *gtkm, const gchar *url);
+
+void gtk_mapserver_set_home (GtkMapserver *gtkm, const gchar *url, GtkMapserverExtent *ext);
 
 
 G_END_DECLS
