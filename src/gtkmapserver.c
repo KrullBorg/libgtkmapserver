@@ -85,8 +85,8 @@ struct _GtkMapserverPrivate
 		GString *url_no_ext;
 		GtkMapserverExtent *ext;
 		GtkMapserverExtent *ext_cur;
-		gdouble ext_scale_x;
-		gdouble ext_scale_y;
+		gdouble canvas_to_ext_x;
+		gdouble canvas_to_ext_y;
 
 		gdouble sel_x_start;
 		gdouble sel_y_start;
@@ -143,8 +143,9 @@ gtk_mapserver_init (GtkMapserver *gtk_mapserver)
 	priv->url_no_ext = NULL;
 	priv->ext = NULL;
 	priv->ext_cur = NULL;
-	priv->ext_scale_x = 0.0;
-	priv->ext_scale_y = 0.0;
+
+	priv->canvas_to_ext_x = 0.0;
+	priv->canvas_to_ext_y = 0.0;
 
 	priv->sel_x_start = 0.0;
 	priv->sel_y_start = 0.0;
@@ -501,6 +502,9 @@ gtk_mapserver_draw (GtkMapserver *gtkm)
 
 	gtk_widget_get_allocation (GTK_WIDGET (gtkm), &allocation);
 
+	priv->canvas_to_ext_x = (priv->ext_cur->maxx - priv->ext_cur->minx) / allocation.width;
+	priv->canvas_to_ext_y = (priv->ext_cur->maxy - priv->ext_cur->miny) / allocation.height;
+
 	goo_canvas_item_get_simple_transform (priv->img,
 										  &x,
 										  &y,
@@ -531,7 +535,6 @@ gtk_mapserver_draw (GtkMapserver *gtkm)
 	g_object_set (G_OBJECT (priv->img),
 				  "pixbuf", pixbuf,
 				  NULL);
-
 	g_free (_url);
 }
 
@@ -647,6 +650,8 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 					gdouble y;
 					gdouble scale;
 					gdouble rotation;
+					gdouble ext_scale_x;
+					gdouble ext_scale_y;
 
 					goo_canvas_item_get_simple_transform (priv->img,
 														  &x,
@@ -660,13 +665,13 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  rotation);
 					gtk_mapserver_center_map (gtkm);
 
-					priv->ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
-					priv->ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
+					ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
+					ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
 
-					priv->ext_cur->minx += priv->ext_scale_x;
-					priv->ext_cur->miny += priv->ext_scale_y;
-					priv->ext_cur->maxx -= priv->ext_scale_x;
-					priv->ext_cur->maxy -= priv->ext_scale_y;
+					priv->ext_cur->minx += ext_scale_x;
+					priv->ext_cur->miny += ext_scale_y;
+					priv->ext_cur->maxx -= ext_scale_x;
+					priv->ext_cur->maxy -= ext_scale_y;
 
 					gtk_mapserver_event_occurred (gtkm);
 
@@ -680,6 +685,8 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 					gdouble y;
 					gdouble scale;
 					gdouble rotation;
+					gdouble ext_scale_x;
+					gdouble ext_scale_y;
 
 					goo_canvas_item_get_simple_transform (priv->img,
 														  &x,
@@ -693,13 +700,13 @@ gtk_mapserver_on_key_release_event (GooCanvasItem *item,
 														  rotation);
 					gtk_mapserver_center_map (gtkm);
 
-					priv->ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
-					priv->ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
+					ext_scale_x = ((priv->ext_cur->maxx - priv->ext_cur->minx) * SCALE) / 2;
+					ext_scale_y = ((priv->ext_cur->maxy - priv->ext_cur->miny) * SCALE) / 2;
 
-					priv->ext_cur->minx -= priv->ext_scale_x;
-					priv->ext_cur->miny -= priv->ext_scale_y;
-					priv->ext_cur->maxx += priv->ext_scale_x;
-					priv->ext_cur->maxy += priv->ext_scale_y;
+					priv->ext_cur->minx -= ext_scale_x;
+					priv->ext_cur->miny -= ext_scale_y;
+					priv->ext_cur->maxx += ext_scale_x;
+					priv->ext_cur->maxy += ext_scale_y;
 
 					gtk_mapserver_event_occurred (gtkm);
 
@@ -715,10 +722,10 @@ gtk_mapserver_on_button_press_event (GtkWidget *widget,
 									 GdkEventButton *event,
 									 gpointer user_data)
 {
-	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+	GtkMapserver *gtkm = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
-	goo_canvas_grab_focus (GOO_CANVAS (gtk_mapserver), priv->img);
+	goo_canvas_grab_focus (GOO_CANVAS (gtkm), priv->img);
 
 	if (event->button == 1)
 		{
@@ -732,8 +739,30 @@ gtk_mapserver_on_button_release_event (GtkWidget *widget,
 									   GdkEventButton *event,
 									   gpointer user_data)
 {
-	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+	GtkMapserver *gtkm = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
+
+	gdouble x;
+	gdouble y;
+	gdouble scale;
+	gdouble rotation;
+
+	goo_canvas_item_get_simple_transform (priv->img,
+										  &x,
+										  &y,
+										  &scale,
+										  &rotation);
+
+	if (x == 0.0 && y == 0.0)
+		{
+			return FALSE;
+		}
+	priv->ext_cur->minx -= (x * priv->canvas_to_ext_x);
+	priv->ext_cur->miny += (y * priv->canvas_to_ext_y);
+	priv->ext_cur->maxx -= (x * priv->canvas_to_ext_x);
+	priv->ext_cur->maxy += (y * priv->canvas_to_ext_y);
+
+	gtk_mapserver_event_occurred (gtkm);
 }
 
 static gboolean
@@ -745,8 +774,8 @@ gtk_mapserver_on_motion_notify_event (GtkWidget *widget,
 	gint y;
 	GdkModifierType state;
 
-	GtkMapserver *gtk_mapserver = GTK_MAPSERVER (user_data);
-	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtk_mapserver);
+	GtkMapserver *gtkm = GTK_MAPSERVER (user_data);
+	GtkMapserverPrivate *priv = GTK_MAPSERVER_GET_PRIVATE (gtkm);
 
 	if (event->is_hint)
 		{
